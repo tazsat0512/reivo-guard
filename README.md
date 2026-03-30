@@ -66,7 +66,7 @@ npx reivo-guard-demo
 |---------|-----------|--------|
 | Budget enforcement | Per-user, per-agent, per-session | Per-instance cumulative |
 | Loop detection (hash) | SHA-256 window match | SHA-256 window match |
-| Loop detection (semantic) | TF-IDF cosine similarity | — |
+| Loop detection (semantic) | TF-IDF cosine similarity | TF-IDF cosine similarity |
 | Quality verification | Logprobs (OpenAI/Gemini) + LLM-as-Judge (Anthropic) | — |
 | Graceful degradation | 4-level progressive | — |
 | Session tracking | Cost, quality trends, auto-upgrade | — |

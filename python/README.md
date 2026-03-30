@@ -288,6 +288,31 @@ from reivo_guard import detect_loop, check_budget, hash_messages
 
 Check if `current_hash` appears >= `threshold` times in `hashes + [current_hash]`.
 
+#### `detect_loop_by_cosine(previous_prompts, current_prompt, threshold=0.92, match_threshold=4) → CosineLoopResult`
+
+Detect loops using TF-IDF cosine similarity. Catches semantically similar prompts even when worded differently.
+
+```python
+from reivo_guard import detect_loop_by_cosine
+
+result = detect_loop_by_cosine(
+    ["How do I sort a list?", "Sort a list please", "List sorting help"],
+    "How to sort lists?",
+    threshold=0.5,
+    match_threshold=2,
+)
+if result.is_loop:
+    print(f"Semantic loop: similarity={result.similarity:.3f}")
+```
+
+```python
+@dataclass
+class CosineLoopResult:
+    is_loop: bool
+    match_count: int
+    similarity: float | None = None
+```
+
 #### `check_budget(used_usd, limit_usd) → tuple[bool, float | None]`
 
 Returns `(exceeded: bool, remaining_usd: float | None)`. `remaining` is None if no limit set.
