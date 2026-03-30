@@ -1,8 +1,8 @@
 # reivo-guard
 
-Open-source guardrails that auto-kill runaway AI agents.
+Open-source guardrails that auto-stop runaway AI agents.
 
-> A developer's autonomous agent ran up a **$47,000 bill overnight**. `reivo-guard` prevents this.
+> Runaway AI agents can burn through **thousands of dollars in hours**. `reivo-guard` prevents this.
 
 [![TypeScript CI](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci.yml)
 [![Python CI](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci-python.yml/badge.svg)](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci-python.yml)
@@ -142,7 +142,11 @@ guard.before()     →  Budget check, loop detection, session validation
 guard.after()      →  Cost tracking, quality verification, trend analysis
 ```
 
-All functions are pure and stateless — state lives in a simple key-value store interface (`GuardStore`). Works in serverless (Cloudflare Workers, Lambda) or as a library.
+Guard functions are side-effect-free on the hot path — state lives in a simple key-value store interface (`GuardStore`). Works in serverless (Cloudflare Workers, Lambda) or as a library.
+
+## Blog Post
+
+[How I Built Open-Source Guardrails That Auto-Stop Runaway AI Agents](https://dev.to/tazsat0512/how-i-built-open-source-guardrails-that-auto-stop-runaway-ai-agents-249m) — architecture deep-dive on DEV.to.
 
 ## Development
 
