@@ -72,6 +72,9 @@ npx reivo-guard-demo
 | Session tracking | Cost, quality trends, auto-upgrade | — |
 | Anomaly detection | EWMA z-score | EWMA z-score |
 | Rate limiting | — | Sliding window |
+| Sequence pattern detection | — | N-gram cycle detection |
+| CUSUM drift detection | — | Page's algorithm with auto-threshold |
+| Budget exhaustion forecasting | — | OLS regression with 95% CI |
 | Cost estimation | — | Built-in pricing table (25 models) |
 | LiteLLM integration | — | 1-line callback |
 | LangChain/LangGraph | — | BaseCallbackHandler |
