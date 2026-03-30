@@ -1,0 +1,38 @@
+{
+  "name": "reivo-guard",
+  "version": "0.1.0",
+  "description": "Open-source guardrails for AI agents — loop detection, budget enforcement, and quality verification.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["llm", "ai", "agent", "guardrail", "loop-detection", "budget", "quality"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tazsat0512/reivo-guard.git",
+    "directory": "ts"
+  },
+  "homepage": "https://github.com/tazsat0512/reivo-guard",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,106 @@
+# reivo-guard (Python)
+
+> Open-source guardrails for AI agents — budget enforcement, loop detection, cost estimation. Zero dependencies. Works with LiteLLM, LangChain, LangGraph, or standalone.
+
+## Install
+
+```bash
+pip install reivo-guard                  # core (zero deps)
+pip install reivo-guard[litellm]         # + LiteLLM callback
+pip install reivo-guard[langchain]       # + LangChain/LangGraph handler
+```
+
+## Standalone Guard
+
+```python
+from reivo_guard import Guard, GuardDecision
+
+guard = Guard(budget_limit_usd=50.0, loop_threshold=3)
+
+decision = guard.before(messages=[{"role": "user", "content": "Hello"}])
+# decision.allowed: bool
+# decision.reason: str | None
+# decision.budget_used_usd: float
+# decision.budget_remaining_usd: float | None
+
+if decision.allowed:
+    response = llm_call(messages)
+    guard.after(cost_usd=0.003)
+    # or: guard.after(model="gpt-4o", input_tokens=100, output_tokens=50)
+
+print(guard.stats)
+# {"total_requests": 1, "total_cost_usd": 0.003, "budget_used_usd": 0.003,
+#  "budget_limit_usd": 50.0, "budget_remaining_usd": 49.997, "blocked_requests": 0}
+```
+
+## LiteLLM Integration
+
+```python
+import litellm
+from reivo_guard import ReivoGuard
+
+litellm.callbacks = [ReivoGuard(budget_limit_usd=50.0)]
+response = litellm.completion(model="gpt-4o", messages=[...])
+```
+
+Custom handlers:
+```python
+ReivoGuard(budget_limit_usd=50.0, on_budget_exceeded=lambda used, limit: ..., on_loop_detected=lambda count, window: ...)
+```
+
+## LangChain / LangGraph Integration
+
+```python
+from reivo_guard.langchain import ReivoCallbackHandler
+
+handler = ReivoCallbackHandler(budget_limit_usd=10.0, default_model="gpt-4o")
+llm = ChatOpenAI(model="gpt-4o", callbacks=[handler])
+```
+
+## Exception Mode
+
+```python
+from reivo_guard import Guard, BudgetExceeded, LoopDetected
+
+guard = Guard(budget_limit_usd=10.0, raise_on_block=True)
+try:
+    guard.before(messages=messages)
+except BudgetExceeded as e:
+    print(e.used, e.limit)
+except LoopDetected as e:
+    print(e.match_count, e.window)
+```
+
+## Cost Estimation
+
+```python
+from reivo_guard import estimate_cost
+estimate_cost("gpt-4o", input_tokens=1000, output_tokens=500)  # → 0.0075
+```
+
+Supported: gpt-4o ($2.50/$10), gpt-4o-mini ($0.15/$0.60), gpt-4-turbo ($10/$30), gpt-4 ($30/$60), gpt-3.5-turbo ($0.50/$1.50), o1 ($15/$60), o1-mini ($3/$12), o3-mini ($1.10/$4.40), claude-3-5-sonnet ($3/$15), claude-3-opus ($15/$75), gemini-1.5-pro ($1.25/$5), gemini-2.0-flash ($0.10/$0.40). Prices per 1M tokens (input/output).
+
+## Pure Functions
+
+```python
+from reivo_guard import detect_loop, check_budget, hash_messages
+
+is_loop, count = detect_loop(hashes, current_hash, threshold=3)
+exceeded, remaining = check_budget(used_usd=45.0, limit_usd=50.0)
+h = hash_messages([{"role": "user", "content": "hello"}])
+```
+
+## API Summary
+
+| Class/Function | Purpose | Dependencies |
+|----------------|---------|-------------|
+| `Guard` | Standalone before/after pattern | None |
+| `GuardDecision` | Result of `guard.before()` | None |
+| `ReivoGuard` | LiteLLM callback | litellm (optional) |
+| `ReivoCallbackHandler` | LangChain handler | langchain-core (optional) |
+| `estimate_cost` | Token-based cost estimation | None |
+| `detect_loop` | Hash-based loop check | None |
+| `check_budget` | Budget limit check | None |
+| `hash_messages` | SHA-256 message hashing | None |
+| `BudgetExceeded` | Exception | None |
+| `LoopDetected` | Exception | None |

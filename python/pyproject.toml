@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reivo-guard"
+version = "0.1.0"
+description = "Open-source guardrails for AI agents — loop detection, budget enforcement, and quality verification."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [{ name = "Reivo", email = "hello@reivo.dev" }]
+keywords = ["llm", "ai", "agent", "guardrail", "loop-detection", "budget"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.optional-dependencies]
+litellm = ["litellm>=1.0.0"]
+langchain = ["langchain-core>=0.2.0"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21"]
+
+[project.urls]
+Homepage = "https://github.com/tazsat0512/reivo-guard"
+Repository = "https://github.com/tazsat0512/reivo-guard"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reivo_guard"]

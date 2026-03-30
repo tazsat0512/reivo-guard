@@ -1,0 +1,103 @@
+# reivo-guard
+
+> Open-source guardrails that auto-kill runaway AI agents. Budget enforcement, loop detection, and quality verification for LLM-powered applications.
+
+## Overview
+
+reivo-guard is a TypeScript/Python library that protects AI agent deployments from runaway costs and infinite loops. It provides pure, stateless functions that work with any key-value store (Cloudflare KV, Redis, in-memory).
+
+## Packages
+
+- `reivo-guard` (npm) — TypeScript. Budget, loop, quality, session, anomaly detection.
+- `reivo-guard` (PyPI) — Python. Standalone Guard class, LiteLLM callback, LangChain handler.
+
+## TypeScript Quick Start
+
+```typescript
+import { checkBudget, getBudgetState, detectLoopByHash } from 'reivo-guard';
+
+const state = await getBudgetState(store, userId);
+const status = checkBudget(state, 50.0);
+if (status.blocked) throw new Error('Budget exceeded');
+
+const result = detectLoopByHash(recentHashes, currentHash);
+if (result.isLoop) throw new Error('Loop detected');
+```
+
+## Python Quick Start
+
+```python
+from reivo_guard import Guard
+
+guard = Guard(budget_limit_usd=50.0)
+decision = guard.before(messages=[{"role": "user", "content": "Hello"}])
+if decision.allowed:
+    response = llm_call(messages)
+    guard.after(cost_usd=0.003)
+```
+
+## Core Concepts
+
+### GuardStore
+Key-value interface: `get(key) → string | null`, `put(key, value, {expirationTtl?})`. Cloudflare KV compatible.
+
+### Budget Enforcement
+- `getBudgetState(store, userId)` — read budget
+- `checkBudget(state, limitUsd)` — check if exceeded
+- `addCost(store, userId, costUsd)` — record spend
+- `getDegradationLevel(usedUsd, limitUsd)` — progressive degradation (normal → aggressive → new_sessions_only → blocked)
+
+### Loop Detection
+- `detectLoopByHash(hashes, currentHash, threshold=3)` — hash-based exact match
+- `detectLoopByCosine(texts, currentText, threshold=0.95)` — TF-IDF similarity
+
+### Quality Verification
+- `assessQuality(response, 'openai'|'google')` — logprob-based scoring
+- `buildJudgePrompt({prompt, response, model})` — GPT-4o-mini judge prompt for Anthropic
+- `parseJudgeResponse(text)` — parse judge output
+
+### Session Management
+- `trackRequest(store, sessionId, userId, input)` — record request
+- `blockSession(store, sessionId, reason)` — force stop
+- `detectQualityTrend(scores)` — detect quality degradation
+
+### Anomaly Detection
+- `detectAnomaly(ewmaState, value, zThreshold=3.0)` — EWMA spike detection
+
+## Python API
+
+### Guard class (standalone)
+```python
+Guard(budget_limit_usd=None, loop_window=20, loop_threshold=3, raise_on_block=False)
+guard.before(messages=None, prompt_hash=None) → GuardDecision(allowed, reason, budget_used_usd, budget_remaining_usd)
+guard.after(cost_usd=0.0, model=None, input_tokens=0, output_tokens=0)
+guard.stats → dict
+guard.reset()
+```
+
+### ReivoGuard class (LiteLLM callback)
+```python
+ReivoGuard(budget_limit_usd=None, loop_window=20, loop_threshold=3, on_budget_exceeded=None, on_loop_detected=None)
+# Auto-hooks: log_pre_api_call, log_success_event, log_failure_event
+```
+
+### ReivoCallbackHandler class (LangChain)
+```python
+from reivo_guard.langchain import ReivoCallbackHandler
+ReivoCallbackHandler(budget_limit_usd=None, loop_window=20, loop_threshold=3, raise_on_block=True, default_model=None)
+# Auto-hooks: on_chat_model_start, on_llm_end, on_llm_error
+```
+
+### Cost estimation
+```python
+from reivo_guard import estimate_cost
+estimate_cost("gpt-4o", input_tokens=1000, output_tokens=500) → 0.0075
+```
+Supports: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo, o1, o1-mini, o3-mini, claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus, claude-sonnet-4, claude-opus-4, gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash.
+
+## Links
+
+- npm: reivo-guard
+- PyPI: reivo-guard
+- Source: packages/guard (TS), packages/guard-python (Python)
+- License: MIT
