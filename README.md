@@ -7,6 +7,52 @@ Open-source guardrails that auto-kill runaway AI agents.
 [![TypeScript CI](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci.yml)
 [![Python CI](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci-python.yml/badge.svg)](https://github.com/tazsat0512/reivo-guard/actions/workflows/ci-python.yml)
 
+## Try It
+
+```bash
+npx reivo-guard-demo
+```
+
+<details>
+<summary>Demo output (click to expand)</summary>
+
+```
+▸ Budget Enforcement
+  Simulating an agent spending against a $10 budget...
+
+  ✓ Request $2.50 → allowed   [█████░░░░░░░░░░░░░░░]  $2.50/$10.00
+  ✓ Request $3.00 → allowed   [███████████░░░░░░░░░]  $5.50/$10.00
+  ✓ Request $2.00 → allowed   [███████████████░░░░░]  $7.50/$10.00
+  ✓ Request $1.50 → allowed   [██████████████████░░]  $9.00/$10.00
+  ✗ Request $1.50 → BLOCKED   [████████████████████]  $10.50/$10.00
+
+▸ Graceful Degradation
+  50% used → normal      (aggressive=false, blockNew=false, blockAll=false)
+  85% used → aggressive  (aggressive=true,  blockNew=false, blockAll=false)
+  96% used → new_sessions_only  (blockNew=true)
+ 100% used → blocked     (blockAll=true)
+
+▸ Loop Detection (Hash Match)
+  ✓ "What is Python?"    → ok (1/5 matches)
+  ✓ "Explain decorators" → ok (1/5 matches)
+  ✓ "What is Python?"    → ok (2/5 matches)
+  ✓ "What is Python?"    → ok (3/5 matches)
+  ✗ "What is Python?"    → LOOP DETECTED (5 matches)
+
+▸ Anomaly Detection (EWMA)
+  ✓ 101 tokens/req → normal  (z-score=0.25)
+  ✓  99 tokens/req → normal  (z-score=-1.61)
+  ✓ 100 tokens/req → normal  (z-score=0.04)
+  ✗ 800 tokens/req → ANOMALY (z-score=499.40)
+
+▸ Performance
+  ✓ checkBudget()          ~70 ns per call
+  ✓ detectLoopByHash()    ~200 ns per call
+  ✓ getDegradationLevel()  ~25 ns per call
+```
+
+</details>
+
 ## Packages
 
 | Package | Language | Install | Status |
@@ -70,6 +116,21 @@ from reivo_guard.langchain import ReivoCallbackHandler
 handler = ReivoCallbackHandler(budget_limit_usd=10.0, default_model="gpt-4o")
 llm = ChatOpenAI(model="gpt-4o", callbacks=[handler])
 ```
+
+## Performance
+
+All guard checks run in **nanoseconds** — zero measurable overhead vs. LLM API latency.
+
+| Operation | TypeScript | Python |
+|-----------|-----------|--------|
+| `checkBudget()` | ~70 ns | — |
+| `detectLoopByHash()` | ~200 ns | — |
+| `getDegradationLevel()` | ~25 ns | — |
+| `guard.before()` | — | ~2.5 µs |
+| `guard.after()` | — | ~0.3 µs |
+| `guard.after()` (with cost estimation) | — | ~0.3 µs |
+
+Benchmarked on Apple M3, 100K iterations. See [`bench/`](./bench/).
 
 ## Architecture
 
