@@ -68,12 +68,14 @@ npx reivo-guard-demo
 | Loop detection (hash) | SHA-256 window match | SHA-256 window match |
 | Loop detection (semantic) | TF-IDF cosine similarity | TF-IDF cosine similarity |
 | Quality verification | Logprobs (OpenAI/Gemini) + LLM-as-Judge (Anthropic) | — |
-| Graceful degradation | 4-level progressive | — |
+| Graceful degradation | 4-level progressive | 4-level progressive |
 | Session tracking | Cost, quality trends, auto-upgrade | — |
-| Anomaly detection | EWMA z-score | — |
+| Anomaly detection | EWMA z-score | EWMA z-score |
+| Rate limiting | — | Sliding window |
 | Cost estimation | — | Built-in pricing table (25 models) |
 | LiteLLM integration | — | 1-line callback |
 | LangChain/LangGraph | — | BaseCallbackHandler |
+| CrewAI | — | step_callback |
 
 ## Quick Start
 

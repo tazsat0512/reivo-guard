@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reivo-guard"
-version = "0.1.1"
+version = "0.2.0"
 description = "Open-source guardrails for AI agents — loop detection, budget enforcement, and quality verification."
 readme = "README.md"
 license = "MIT"

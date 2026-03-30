@@ -15,9 +15,12 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from .anomaly import AnomalyResult, EwmaState, detect_anomaly, update_ewma
+from .degradation import DegradationLevel, DegradationPolicy, get_degradation_level
 from .guard import (
     BudgetExceeded,
     BudgetState,
@@ -25,6 +28,26 @@ from .guard import (
     LoopState,
     _hash_messages,
 )
+
+
+class AnomalyDetected(Exception):
+    """Raised when an anomalous spike is detected."""
+
+    def __init__(self, z_score: float, current_rate: float):
+        self.z_score = z_score
+        self.current_rate = current_rate
+        super().__init__(f"Anomaly detected: z-score={z_score:.2f}, rate={current_rate}")
+
+
+class RateLimitExceeded(Exception):
+    """Raised when rate limit is exceeded."""
+
+    def __init__(self, requests_in_window: int, limit: int):
+        self.requests_in_window = requests_in_window
+        self.limit = limit
+        super().__init__(
+            f"Rate limit exceeded: {requests_in_window}/{limit} requests"
+        )
 
 
 @dataclass
@@ -35,6 +58,8 @@ class GuardDecision:
     reason: Optional[str] = None
     budget_used_usd: float = 0.0
     budget_remaining_usd: Optional[float] = None
+    degradation_level: Optional[DegradationLevel] = None
+    anomaly: Optional[AnomalyResult] = None
 
 
 class Guard:
@@ -44,8 +69,12 @@ class Guard:
         budget_limit_usd: Maximum cumulative spend in USD. None = unlimited.
         loop_window: Number of recent requests to check for loops.
         loop_threshold: Number of identical prompts within the window to trigger.
-        raise_on_block: If True, before() raises BudgetExceeded/LoopDetected
-            instead of returning a non-allowed GuardDecision.
+        raise_on_block: If True, before() raises exceptions instead of returning
+            a non-allowed GuardDecision.
+        enable_anomaly_detection: Enable EWMA anomaly detection on token counts.
+        anomaly_z_threshold: Z-score threshold for anomaly detection. Default 3.0.
+        rate_limit: Max requests per rate_limit_window seconds. None = unlimited.
+        rate_limit_window: Time window in seconds for rate limiting. Default 60.
     """
 
     def __init__(
@@ -54,6 +83,10 @@ class Guard:
         loop_window: int = 20,
         loop_threshold: int = 3,
         raise_on_block: bool = False,
+        enable_anomaly_detection: bool = False,
+        anomaly_z_threshold: float = 3.0,
+        rate_limit: Optional[int] = None,
+        rate_limit_window: float = 60.0,
     ) -> None:
         from collections import deque
 
@@ -63,11 +96,23 @@ class Guard:
             raise ValueError("loop_window must be >= 1")
         if loop_threshold < 2:
             raise ValueError("loop_threshold must be >= 2")
+        if rate_limit is not None and rate_limit < 1:
+            raise ValueError("rate_limit must be >= 1 or None")
 
         self._budget = BudgetState(limit_usd=budget_limit_usd)
         self._loop = LoopState(threshold=loop_threshold)
         self._loop.hashes = deque(maxlen=loop_window)
         self._raise_on_block = raise_on_block
+
+        # Anomaly detection
+        self._anomaly_enabled = enable_anomaly_detection
+        self._anomaly_z_threshold = anomaly_z_threshold
+        self._ewma = EwmaState()
+
+        # Rate limiting
+        self._rate_limit = rate_limit
+        self._rate_limit_window = rate_limit_window
+        self._request_timestamps: list[float] = []
 
         self.total_requests: int = 0
         self.total_cost_usd: float = 0.0
@@ -77,16 +122,29 @@ class Guard:
         self,
         messages: Any = None,
         prompt_hash: Optional[str] = None,
+        token_count: Optional[int] = None,
     ) -> GuardDecision:
-        """Check budget and loop before an LLM call.
+        """Check budget, loop, anomaly, and rate limit before an LLM call.
 
         Provide either ``messages`` (will be hashed) or a pre-computed
-        ``prompt_hash``.  If neither is given, only the budget check runs.
+        ``prompt_hash``.  If neither is given, only budget/rate checks run.
+
+        Args:
+            messages: Messages list to hash for loop detection.
+            prompt_hash: Pre-computed hash (alternative to messages).
+            token_count: Token count for anomaly detection (e.g., prompt tokens).
         """
         remaining = self._budget.remaining_usd
         used = self._budget.used_usd
 
-        # Budget check
+        # Degradation level
+        degradation: Optional[DegradationPolicy] = None
+        deg_level: Optional[DegradationLevel] = None
+        if self._budget.limit_usd is not None:
+            degradation = get_degradation_level(used, self._budget.limit_usd)
+            deg_level = degradation.level
+
+        # Budget check (blocked level)
         if self._budget.exceeded:
             self.blocked_requests += 1
             if self._raise_on_block:
@@ -96,7 +154,30 @@ class Guard:
                 reason=f"Budget exceeded: ${used:.4f} / ${self._budget.limit_usd:.2f}",
                 budget_used_usd=used,
                 budget_remaining_usd=0.0,
+                degradation_level=deg_level,
             )
+
+        # Rate limiting
+        if self._rate_limit is not None:
+            now = time.monotonic()
+            cutoff = now - self._rate_limit_window
+            self._request_timestamps = [
+                t for t in self._request_timestamps if t > cutoff
+            ]
+            if len(self._request_timestamps) >= self._rate_limit:
+                self.blocked_requests += 1
+                if self._raise_on_block:
+                    raise RateLimitExceeded(
+                        len(self._request_timestamps), self._rate_limit
+                    )
+                return GuardDecision(
+                    allowed=False,
+                    reason=f"Rate limit exceeded: {len(self._request_timestamps)}/{self._rate_limit} requests in {self._rate_limit_window}s",
+                    budget_used_usd=used,
+                    budget_remaining_usd=remaining,
+                    degradation_level=deg_level,
+                )
+            self._request_timestamps.append(now)
 
         # Loop detection
         h = prompt_hash or (_hash_messages(messages) if messages is not None else None)
@@ -113,12 +194,35 @@ class Guard:
                     reason=f"Loop detected: {count} identical prompts in last {window} requests",
                     budget_used_usd=used,
                     budget_remaining_usd=remaining,
+                    degradation_level=deg_level,
+                )
+
+        # Anomaly detection
+        anomaly_result: Optional[AnomalyResult] = None
+        if self._anomaly_enabled and token_count is not None:
+            anomaly_result = detect_anomaly(
+                self._ewma, token_count, self._anomaly_z_threshold
+            )
+            self._ewma = update_ewma(self._ewma, token_count)
+            if anomaly_result.is_anomaly:
+                self.blocked_requests += 1
+                if self._raise_on_block:
+                    raise AnomalyDetected(anomaly_result.z_score, token_count)
+                return GuardDecision(
+                    allowed=False,
+                    reason=f"Anomaly detected: z-score={anomaly_result.z_score:.2f} (threshold={self._anomaly_z_threshold})",
+                    budget_used_usd=used,
+                    budget_remaining_usd=remaining,
+                    degradation_level=deg_level,
+                    anomaly=anomaly_result,
                 )
 
         return GuardDecision(
             allowed=True,
             budget_used_usd=used,
             budget_remaining_usd=remaining,
+            degradation_level=deg_level,
+            anomaly=anomaly_result,
         )
 
     def after(
@@ -146,9 +250,16 @@ class Guard:
         self.total_cost_usd += cost_usd
 
     @property
+    def degradation(self) -> Optional[DegradationPolicy]:
+        """Get current degradation policy. None if no budget limit."""
+        if self._budget.limit_usd is None:
+            return None
+        return get_degradation_level(self._budget.used_usd, self._budget.limit_usd)
+
+    @property
     def stats(self) -> dict[str, Any]:
         """Return current guard statistics."""
-        return {
+        result: dict[str, Any] = {
             "total_requests": self.total_requests,
             "total_cost_usd": round(self.total_cost_usd, 6),
             "budget_used_usd": round(self._budget.used_usd, 6),
@@ -160,6 +271,13 @@ class Guard:
             ),
             "blocked_requests": self.blocked_requests,
         }
+        if self._budget.limit_usd is not None:
+            deg = get_degradation_level(self._budget.used_usd, self._budget.limit_usd)
+            result["degradation_level"] = deg.level
+        if self._anomaly_enabled:
+            result["ewma_value"] = round(self._ewma.ewma_value, 4)
+            result["ewma_samples"] = self._ewma.sample_count
+        return result
 
     def reset(self) -> None:
         """Reset all state."""
@@ -167,6 +285,8 @@ class Guard:
         from collections import deque
 
         self._loop.hashes = deque(maxlen=self._loop.hashes.maxlen)
+        self._ewma = EwmaState()
+        self._request_timestamps = []
         self.total_requests = 0
         self.total_cost_usd = 0.0
         self.blocked_requests = 0
