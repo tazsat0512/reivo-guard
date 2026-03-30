@@ -122,7 +122,7 @@ class ReivoCallbackHandler(BaseCallbackHandler):
                     break
 
         self._guard.after(
-            cost_usd=cost,
+            cost_usd=cost if cost > 0 else None,
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -136,8 +136,8 @@ class ReivoCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:
-        """Called on LLM error. Counts the request."""
-        self._guard.total_requests += 1
+        """Called on LLM error."""
+        pass  # total_requests already incremented in on_chat_model_start → before()
 
     # ── Utility ───────────────────────────────────────────────────
 

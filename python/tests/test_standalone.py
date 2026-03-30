@@ -79,7 +79,9 @@ class TestGuardBefore:
 class TestGuardAfter:
     def test_tracks_cost(self):
         g = Guard()
+        g.before()  # total_requests incremented in before()
         g.after(cost_usd=0.5)
+        g.before()
         g.after(cost_usd=0.3)
         assert g.total_cost_usd == pytest.approx(0.8)
         assert g.total_requests == 2
@@ -106,6 +108,7 @@ class TestGuardAfter:
 class TestGuardStats:
     def test_stats_shape(self):
         g = Guard(budget_limit_usd=5.0)
+        g.before()
         g.after(cost_usd=1.0)
         s = g.stats
         assert s["total_requests"] == 1

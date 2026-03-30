@@ -102,8 +102,11 @@ class TestLangChainHandler:
         assert h.stats["total_cost_usd"] > 0
 
     def test_blocks_on_budget(self):
-        h = ReivoCallbackHandler(budget_limit_usd=0.001, raise_on_block=True)
-        # Simulate spending
+        h = ReivoCallbackHandler(
+            budget_limit_usd=0.001, raise_on_block=True, default_model="gpt-4o-mini"
+        )
+        # Simulate spending via before/after cycle
+        h.on_chat_model_start({}, self._make_messages("setup"), run_id=uuid4())
         h.on_llm_end(
             self._make_llm_result(prompt_tokens=100000, completion_tokens=100000),
             run_id=uuid4(),
@@ -125,8 +128,10 @@ class TestLangChainHandler:
         h.on_chat_model_start({}, self._make_messages("msg3"), run_id=uuid4())
         # No exception
 
-    def test_on_llm_error_counts_request(self):
+    def test_on_llm_error_counted_via_start(self):
         h = ReivoCallbackHandler()
+        # total_requests is counted in on_chat_model_start, not on_llm_error
+        h.on_chat_model_start({}, self._make_messages(), run_id=uuid4())
         h.on_llm_error(RuntimeError("fail"), run_id=uuid4())
         assert h.stats["total_requests"] == 1
 
@@ -157,5 +162,6 @@ class TestLangChainHandler:
             llm_output={"model_name": "gpt-4o-mini"},
         )
         h = ReivoCallbackHandler(budget_limit_usd=10.0)
+        h.on_chat_model_start({}, self._make_messages(), run_id=uuid4())
         h.on_llm_end(result, run_id=uuid4())
         assert h.stats["total_cost_usd"] > 0

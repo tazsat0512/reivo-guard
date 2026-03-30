@@ -173,7 +173,7 @@ def _ols(
     mean_y = sum_y / n
     ss_tot = sum((y - mean_y) ** 2 for y in ys)
     ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys))
-    r_sq = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    r_sq = max(0.0, 1 - (ss_res / ss_tot)) if ss_tot > 0 else 0.0
 
     # Standard error of slope
     if n <= 2 or denom == 0:

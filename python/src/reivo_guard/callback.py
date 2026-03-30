@@ -111,7 +111,7 @@ class ReivoGuard:
         end_time: datetime,
     ) -> None:
         """Called after a failed LLM request."""
-        self._guard.total_requests += 1
+        pass  # total_requests already incremented in log_pre_api_call → before()
         logger.warning(
             "reivo-guard: request failed model=%s", kwargs.get("model", "unknown")
         )

@@ -75,7 +75,7 @@ def detect_drift(
 
     std_dev = _running_std(state)
     if std_dev == 0:
-        std_dev = abs(state.target) * 0.01 or 1.0  # fallback
+        std_dev = max(abs(state.target) * 0.01, 1.0)  # fallback
 
     h = threshold if threshold is not None else 4.0 * std_dev
     k = slack if slack is not None else 0.5 * std_dev
@@ -133,7 +133,9 @@ def update_cusum(
     deviation = new_value - state.target if state.sample_count > 0 else 0.0
 
     std_dev = _running_std(state)
-    k = slack if slack is not None else 0.5 * (std_dev if std_dev > 0 else 1.0)
+    if std_dev == 0:
+        std_dev = max(abs(state.target) * 0.01, 1.0)
+    k = slack if slack is not None else 0.5 * std_dev
 
     new_pos = max(0, state.pos_sum + deviation - k)
     new_neg = max(0, state.neg_sum - deviation - k)

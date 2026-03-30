@@ -125,12 +125,15 @@ class TestCostTracking:
     def test_tracks_cumulative_cost(self):
         guard = ReivoGuard(budget_limit_usd=100.0)
         now = datetime.now()
+        # total_requests is now incremented in log_pre_api_call (before)
+        guard.log_pre_api_call("gpt-4o-mini", [{"role": "user", "content": "a"}], {})
         guard.log_success_event(
             {"response_cost": 0.05, "model": "gpt-4o-mini"},
             MagicMock(),
             now,
             now,
         )
+        guard.log_pre_api_call("gpt-4o", [{"role": "user", "content": "b"}], {})
         guard.log_success_event(
             {"response_cost": 0.10, "model": "gpt-4o"},
             MagicMock(),

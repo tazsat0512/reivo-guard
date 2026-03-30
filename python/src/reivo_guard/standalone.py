@@ -144,6 +144,8 @@ class Guard:
             degradation = get_degradation_level(used, self._budget.limit_usd)
             deg_level = degradation.level
 
+        self.total_requests += 1
+
         # Budget check (blocked level)
         if self._budget.exceeded:
             self.blocked_requests += 1
@@ -158,9 +160,10 @@ class Guard:
             )
 
         # Rate limiting
+        _rate_limit_now: Optional[float] = None
         if self._rate_limit is not None:
-            now = time.monotonic()
-            cutoff = now - self._rate_limit_window
+            _rate_limit_now = time.monotonic()
+            cutoff = _rate_limit_now - self._rate_limit_window
             self._request_timestamps = [
                 t for t in self._request_timestamps if t > cutoff
             ]
@@ -177,7 +180,6 @@ class Guard:
                     budget_remaining_usd=remaining,
                     degradation_level=deg_level,
                 )
-            self._request_timestamps.append(now)
 
         # Loop detection
         h = prompt_hash or (_hash_messages(messages) if messages is not None else None)
@@ -217,6 +219,10 @@ class Guard:
                     anomaly=anomaly_result,
                 )
 
+        # Only consume rate limit slot when request is allowed
+        if _rate_limit_now is not None:
+            self._request_timestamps.append(_rate_limit_now)
+
         return GuardDecision(
             allowed=True,
             budget_used_usd=used,
@@ -227,18 +233,22 @@ class Guard:
 
     def after(
         self,
-        cost_usd: float = 0.0,
+        cost_usd: Optional[float] = None,
         model: Optional[str] = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
     ) -> None:
         """Record cost after an LLM call.
 
-        If ``cost_usd`` is 0 and token counts are provided, cost is estimated
-        using ``estimate_cost()``.
+        If ``cost_usd`` is None and token counts are provided, cost is estimated
+        using ``estimate_cost()``. Pass ``cost_usd=0.0`` explicitly to record
+        zero cost without triggering estimation.
         """
-        if cost_usd <= 0 and (input_tokens > 0 or output_tokens > 0) and model:
+        if cost_usd is None and (input_tokens > 0 or output_tokens > 0) and model:
             cost_usd = estimate_cost(model, input_tokens, output_tokens)
+
+        if cost_usd is None:
+            cost_usd = 0.0
 
         import math
 
@@ -246,7 +256,6 @@ class Guard:
             cost_usd = 0.0
 
         self._budget.add_cost(cost_usd)
-        self.total_requests += 1
         self.total_cost_usd += cost_usd
 
     @property
