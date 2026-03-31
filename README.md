@@ -153,6 +153,10 @@ Guard functions are side-effect-free on the hot path — state lives in a simple
 
 [How I Built Open-Source Guardrails That Auto-Stop Runaway AI Agents](https://dev.to/tazsat0512/how-i-built-open-source-guardrails-that-auto-stop-runaway-ai-agents-249m) — architecture deep-dive on DEV.to.
 
+## Managed Cloud
+
+Want managed guardrails + smart model routing + dashboard? [reivo.dev](https://reivo.dev) runs reivo-guard as a drop-in proxy — change your base URL and it works.
+
 ## Development
 
 ```bash
