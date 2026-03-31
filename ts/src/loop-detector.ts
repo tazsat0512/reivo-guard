@@ -93,7 +93,7 @@ function buildTfIdfVectors(docs: string[]): Map<string, number>[] {
     }
     const vector = new Map<string, number>();
     for (const [token, freq] of tf) {
-      const idf = Math.log(n / (df.get(token) ?? 1));
+      const idf = Math.log(1 + n / (df.get(token) ?? 1));
       vector.set(token, (freq / tokens.length) * idf);
     }
     return vector;

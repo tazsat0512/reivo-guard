@@ -64,18 +64,19 @@ npx reivo-guard-demo
 
 | Feature | TypeScript | Python |
 |---------|-----------|--------|
+| **Guard class** (before/after) | `new Guard({ budgetLimitUsd: 50 })` | `Guard(budget_limit_usd=50)` |
 | Budget enforcement | Per-user, per-agent, per-session | Per-instance cumulative |
 | Loop detection (hash) | SHA-256 window match | SHA-256 window match |
 | Loop detection (semantic) | TF-IDF cosine similarity | TF-IDF cosine similarity |
 | Quality verification | Logprobs (OpenAI/Gemini) + LLM-as-Judge (Anthropic) | — |
 | Graceful degradation | 4-level progressive | 4-level progressive |
 | Session tracking | Cost, quality trends, auto-upgrade | — |
-| Anomaly detection | EWMA z-score | EWMA z-score |
-| Rate limiting | — | Sliding window |
+| Anomaly detection | EWMA z-score (abs + warmup) | EWMA z-score (abs + warmup) |
+| Rate limiting | Sliding window | Sliding window |
+| Cost estimation | Built-in pricing table (20 models) | Built-in pricing table (20 models) |
 | Sequence pattern detection | — | N-gram cycle detection |
 | CUSUM drift detection | — | Page's algorithm with auto-threshold |
 | Budget exhaustion forecasting | — | OLS regression with 95% CI |
-| Cost estimation | — | Built-in pricing table (25 models) |
 | LiteLLM integration | — | 1-line callback |
 | LangChain/LangGraph | — | BaseCallbackHandler |
 | CrewAI | — | step_callback |
@@ -85,11 +86,15 @@ npx reivo-guard-demo
 ### TypeScript
 
 ```typescript
-import { checkBudget, getBudgetState, detectLoopByHash } from 'reivo-guard';
+import { Guard } from 'reivo-guard';
 
-const state = await getBudgetState(store, userId);
-const status = checkBudget(state, 50.0);
-if (status.blocked) throw new Error('Budget exceeded');
+const guard = new Guard({ budgetLimitUsd: 50.0, loopThreshold: 5 });
+
+const decision = guard.before({ messages: [{ role: 'user', content: 'Hello' }] });
+if (!decision.allowed) throw new Error(decision.reason);
+const response = await callLlm(messages);
+guard.after({ costUsd: 0.003 });
+// or: guard.after({ model: 'gpt-4o-mini', inputTokens: 100, outputTokens: 50 });
 ```
 
 ### Python
@@ -128,12 +133,11 @@ All guard checks run in **nanoseconds** — zero measurable overhead vs. LLM API
 
 | Operation | TypeScript | Python |
 |-----------|-----------|--------|
+| `guard.before()` | ~0.5 µs | ~2.5 µs |
+| `guard.after()` | ~0.1 µs | ~0.3 µs |
 | `checkBudget()` | ~70 ns | — |
 | `detectLoopByHash()` | ~200 ns | — |
 | `getDegradationLevel()` | ~25 ns | — |
-| `guard.before()` | — | ~2.5 µs |
-| `guard.after()` | — | ~0.3 µs |
-| `guard.after()` (with cost estimation) | — | ~0.3 µs |
 
 Benchmarked on Apple M3, 100K iterations. See [`bench/`](./bench/).
 

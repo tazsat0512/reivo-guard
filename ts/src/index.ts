@@ -1,3 +1,18 @@
+// Standalone Guard (primary API)
+export {
+  Guard,
+  type GuardOptions,
+  type BeforeInput,
+  type AfterInput,
+  type GuardDecision,
+  type GuardStats,
+  BudgetExceeded,
+  LoopDetected,
+  AnomalyDetectedError,
+  RateLimitExceeded,
+  estimateCost,
+} from './guard.js';
+
 // Constants and shared types
 export {
   type AnomalyResult,

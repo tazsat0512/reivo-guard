@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 
-import {
+// When installed via npm, import from 'reivo-guard'.
+// For local development, resolve from ../ts/dist/index.js.
+import { existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+const localDist = new URL('../ts/dist/index.js', import.meta.url);
+const pkg = existsSync(localDist) ? localDist : 'reivo-guard';
+const {
+  Guard,
   checkBudget,
   detectLoopByHash,
   getDegradationLevel,
@@ -12,7 +20,8 @@ import {
   initEwmaState,
   updateEwma,
   detectAnomaly,
-} from 'reivo-guard';
+  estimateCost,
+} = await import(pkg);
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -145,7 +154,65 @@ for (const rate of tokenRates) {
   }
 }
 
-// ── 6. Performance ─────────────────────────────────────
+// ── 6. Guard Class (Unified API) ──────────────────────
+header('Guard Class (before/after pattern)');
+info('The simplest way to use reivo-guard — wraps all checks in one class.\n');
+
+{
+  const guard = new Guard({
+    budgetLimitUsd: 0.50,
+    loopThreshold: 3,
+    enableAnomalyDetection: true,
+    anomalyWarmup: 5,
+  });
+
+  // Simulate agent conversation
+  const conversation = [
+    { messages: [{ role: 'user', content: 'Summarize this article' }], cost: 0.08, tokens: 150 },
+    { messages: [{ role: 'user', content: 'Now translate it to French' }], cost: 0.12, tokens: 200 },
+    { messages: [{ role: 'user', content: 'Create a bullet-point version' }], cost: 0.10, tokens: 180 },
+    { messages: [{ role: 'user', content: 'Summarize this article' }], cost: 0.08, tokens: 150 },
+    { messages: [{ role: 'user', content: 'Summarize this article' }], cost: 0.08, tokens: 150 },
+    { messages: [{ role: 'user', content: 'One more expensive call' }], cost: 0.25, tokens: 500 },
+  ];
+
+  for (const turn of conversation) {
+    await sleep(150);
+    const decision = guard.before({ messages: turn.messages, tokenCount: turn.tokens });
+    const prompt = turn.messages[0].content;
+    if (!decision.allowed) {
+      fail(`"${prompt}" → ${RED}BLOCKED${RESET} ${DIM}(${decision.reason})${RESET}`);
+    } else {
+      guard.after({ costUsd: turn.cost });
+      const deg = decision.degradationLevel ?? 'none';
+      const remaining = decision.budgetRemainingUsd?.toFixed(2) ?? '∞';
+      ok(`"${prompt}" → $${turn.cost.toFixed(2)} ${DIM}(remaining: $${remaining}, level: ${deg})${RESET}`);
+    }
+  }
+
+  console.log('');
+  const s = guard.stats;
+  info(`Stats: ${s.totalRequests} requests, $${s.totalCostUsd.toFixed(2)} spent, ${s.blockedRequests} blocked`);
+}
+
+// ── 7. Cost Estimation ────────────────────────────────
+header('Cost Estimation');
+info('Built-in pricing table for 20+ models.\n');
+
+const models = [
+  { model: 'gpt-4o', input: 1000, output: 500 },
+  { model: 'gpt-4o-mini', input: 1000, output: 500 },
+  { model: 'claude-sonnet-4-20250514', input: 1000, output: 500 },
+  { model: 'gemini-2.0-flash', input: 1000, output: 500 },
+];
+
+for (const m of models) {
+  await sleep(100);
+  const cost = estimateCost(m.model, m.input, m.output);
+  ok(`${m.model}: ${m.input} in + ${m.output} out = ${BOLD}$${cost.toFixed(6)}${RESET}`);
+}
+
+// ── 8. Performance ─────────────────────────────────────
 header('Performance');
 
 const BENCH_N = 100_000;

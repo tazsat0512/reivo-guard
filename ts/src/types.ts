@@ -21,5 +21,6 @@ export interface LoopState {
 export interface EwmaState {
   ewmaValue: number;
   ewmaVariance: number;
+  sampleCount?: number;
   lastUpdated: number;
 }
